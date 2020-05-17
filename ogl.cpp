@@ -10,8 +10,12 @@
 #include "ogl.h"
 #include "triangle.h"
 #include "drawable.h"
+#include "shader_loader.h"
 
 using namespace glm;
+
+const char* VERTEX_SHADER = "shaders/vertex.glsl";
+const char* FRAGMENT_SHADER = "shaders/fragment.glsl";
 
 int main()
 {
@@ -26,7 +30,8 @@ int main()
     std::vector<std::shared_ptr<Drawable>> drawables;
     drawables.push_back(triangle);
 
-    mainLoop(window, drawables);
+    GLuint programId = initShaders();
+    mainLoop(window, drawables, programId);
     glfwTerminate();
 }
 
@@ -67,18 +72,52 @@ int initWindow(GLFWwindow*& window)
     return 0;
 }
 
+GLuint initShaders() {
+    ShaderLoader loader;
+    std::stringstream vertexCode = loader.getCode(VERTEX_SHADER);
+    std::stringstream frgmntCode = loader.getCode(FRAGMENT_SHADER);
+    GLuint vertexShaderId = loader.compileShader(vertexCode.str().c_str(), GL_VERTEX_SHADER);
+    GLuint frgmntShaderId = loader.compileShader(frgmntCode.str().c_str(), GL_FRAGMENT_SHADER);
+    // Link program
+    GLuint programId = glCreateProgram();
+    glAttachShader(programId, vertexShaderId);
+    glAttachShader(programId, frgmntShaderId);
+    glLinkProgram(programId);
+    // Check the program
+    checkProgram(programId);
+    glDetachShader(programId, vertexShaderId);
+    glDetachShader(programId, frgmntShaderId);
+    glDeleteShader(vertexShaderId);
+    glDeleteShader(frgmntShaderId);
+    return programId;
+}
+
+void checkProgram(const GLuint& programId)
+{
+    GLint result = GL_FALSE;
+    int infoLogLength;
+    glGetProgramiv(programId, GL_LINK_STATUS, &result);
+    glGetProgramiv(programId, GL_INFO_LOG_LENGTH, &infoLogLength);
+    if (infoLogLength > 0) {
+        std::vector<char> error(infoLogLength + 1);
+        glGetProgramInfoLog(programId, infoLogLength, NULL, &error[0]);
+        printf("%s\n", &error[0]);
+    }
+}
+
 /*! @brief Main loop, draws the buffer to the window
  */
-void mainLoop(GLFWwindow* window, std::vector<std::shared_ptr<Drawable>> drawables)
+void mainLoop(GLFWwindow* window, std::vector<std::shared_ptr<Drawable>> drawables, GLuint shaderProgramId)
 {
     do {
-        // Clear the screen. It's not mentioned before Tutorial 02, but it can cause flickering, so it's there nonetheless.
+        // Clear the screen to avoid flickering
         glClear(GL_COLOR_BUFFER_BIT);
-
+        // Use shaders
+        glUseProgram(shaderProgramId);
+        // Draw objects
         for (auto const& value : drawables) {
             value->draw();
         }
-
         // Swap buffers
         glfwSwapBuffers(window);
         glfwPollEvents();

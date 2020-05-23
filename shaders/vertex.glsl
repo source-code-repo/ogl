@@ -1,7 +1,8 @@
-// Vertex shader. Reduces size by 50%
+// Vertex shader, applies model, view and projection transforms
 #version 330 core
 layout(location = 0) in vec3 vertexPosition_modelspace;
+uniform mat4 mvp; // Model, view, projection
 void main(){
-  gl_Position.xyz = vertexPosition_modelspace * 0.5;
-  gl_Position.w = 1.0;
+  // Output position of the vertex, in clip space : mvp * position
+  gl_Position =  mvp * vec4(vertexPosition_modelspace,1);
 }

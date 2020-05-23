@@ -6,6 +6,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "ogl.h"
 #include "triangle.h"
@@ -29,9 +30,29 @@ int main()
     triangle->buffer();
     std::vector<std::shared_ptr<Drawable>> drawables;
     drawables.push_back(triangle);
-
     GLuint programId = initShaders();
-    mainLoop(window, drawables, programId);
+    GLuint mvpMatrix = glGetUniformLocation(programId, "mvp");
+    // Main loop
+    do {
+        // Clear the screen to avoid flickering
+        glClear(GL_COLOR_BUFFER_BIT);
+        // Use shaders
+        glUseProgram(programId);
+        glm::mat4 mvp = project();
+        // Transform model into world space then camera space then 2d projection
+        glUniformMatrix4fv(mvpMatrix, 1, GL_FALSE, &mvp[0][0]);
+        // Draw objects
+        for (auto const& value : drawables) {
+            value->draw();
+        }
+        // Swap buffers
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+
+    } // Check if the ESC key was pressed or the window was closed
+    while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&
+        glfwWindowShouldClose(window) == 0);
+
     glfwTerminate();
 }
 
@@ -84,7 +105,7 @@ GLuint initShaders() {
     glAttachShader(programId, frgmntShaderId);
     glLinkProgram(programId);
     // Check the program
-    checkProgram(programId);
+    checkShaders(programId);
     glDetachShader(programId, vertexShaderId);
     glDetachShader(programId, frgmntShaderId);
     glDeleteShader(vertexShaderId);
@@ -92,7 +113,7 @@ GLuint initShaders() {
     return programId;
 }
 
-void checkProgram(const GLuint& programId)
+void checkShaders(const GLuint& programId)
 {
     GLint result = GL_FALSE;
     int infoLogLength;
@@ -105,24 +126,26 @@ void checkProgram(const GLuint& programId)
     }
 }
 
-/*! @brief Main loop, draws the buffer to the window
+/*! @brief Applies model, view and projection using shaders
+ *  @param Shader program ID
  */
-void mainLoop(GLFWwindow* window, std::vector<std::shared_ptr<Drawable>> drawables, GLuint shaderProgramId)
-{
-    do {
-        // Clear the screen to avoid flickering
-        glClear(GL_COLOR_BUFFER_BIT);
-        // Use shaders
-        glUseProgram(shaderProgramId);
-        // Draw objects
-        for (auto const& value : drawables) {
-            value->draw();
-        }
-        // Swap buffers
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+glm::mat4 project() {
+    // Projection matrix : 45° Field of View, 4:3 ratio, display range : 0.1 unit <-> 100 units
+    //glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)4.0f / (float)3.0f, 0.1f, 100.0f);
 
-    } // Check if the ESC key was pressed or the window was closed
-    while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&
-        glfwWindowShouldClose(window) == 0);
+    // Or, for an ortho camera :
+    glm::mat4 projection = glm::ortho(-10.0f,10.0f,-10.0f,10.0f,0.0f,100.0f); // In world coordinates
+
+    // Camera matrix
+    glm::mat4 view = glm::lookAt(
+        glm::vec3(4, 3, 3), // Camera is at (4,3,3), in World Space
+        glm::vec3(0, 0, 0), // and looks at the origin
+        glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
+    );
+
+    // Model matrix : an identity matrix (model will be at the origin)
+    glm::mat4 model = glm::mat4(1.0f);
+    // Our ModelViewProjection : multiplication of our 3 matrices
+    glm::mat4 mvp = projection * view * model; // Remember, matrix multiplication is the other way around
+    return mvp;
 }
